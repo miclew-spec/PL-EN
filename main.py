@@ -9,55 +9,61 @@ W, H = int(148/25.4*300), int(105/25.4*300)
 
 def nazwa_pliku(s):
     s = re.sub(r'[\\/*?:"<>|]', "", s)
-    return s.strip().replace(" ", "_")[:30]
+    s = s.strip().replace(" ", "_")
+    return s[:25] if s else "etykieta"
 
 class TlumaczA6PLEN:
     def __init__(self, r):
         self.r = r
         self.r.title("Generator Etykiet A6 (PL / EN)")
         
-        # Nagłówek
         lbl_info = tk.Label(r, text="Etykiety A6: Polski + Angielski", font=("Arial", 11, "bold"))
         lbl_info.pack(pady=(10, 0))
 
-        # Pole tekstowe do wklejania haseł
         self.t = tk.Text(r, height=10, width=50)
         self.t.pack(pady=10, padx=10)
         
-        # Przycisk generowania
         self.btn = tk.Button(r, text="GENERUJ ETYKIETY (PL / EN)", command=self.go, bg="green", fg="white", font=("Arial", 10, "bold"))
         self.btn.pack(pady=5)
         
-        # Pasek postępu
         self.p = ttk.Progressbar(r, length=300, mode='determinate')
         self.p.pack(pady=10)
 
+    def pobierz_czcionke(self, font_size):
+        # Bezpieczne pobieranie czcionki systemowej
+        sciezki_czcionek = [
+            "arialbd.ttf",
+            "C:\\Windows\\Fonts\\arialbd.ttf",
+            "C:\\Windows\\Fonts\\arial.ttf"
+        ]
+        for path in sciezki_czcionek:
+            try:
+                return ImageFont.truetype(path, font_size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
     def rysuj_sekcje_auto(self, draw, tekst, y_range):
         font_size = 85
-        try:
-            fnt = ImageFont.truetype("arialbd.ttf", font_size)
-        except:
-            fnt = ImageFont.load_default()
+        fnt = self.pobierz_czcionke(font_size)
 
         max_w = W - 300
-        
-        char_w = draw.textbbox((0,0), "W", font=fnt)[2]
+        char_w = draw.textbbox((0, 0), "W", font=fnt)[2]
         limit = max(1, int(max_w // char_w))
         
         linie = textwrap.wrap(tekst.upper(), width=limit)
         
         if len(linie) > 3:
-            font_size = 65
-            try: fnt = ImageFont.truetype("arialbd.ttf", font_size)
-            except: fnt = ImageFont.load_default()
+            font_size = 60
+            fnt = self.pobierz_czcionke(font_size)
             limit = max(1, int(max_w // (char_w * 0.7)))
             linie = textwrap.wrap(tekst.upper(), width=limit)
 
         y_s, y_e = y_range
         line_spacing = 15
-        bbox_sample = draw.textbbox((0,0), "Ay", font=fnt)
+        bbox_sample = draw.textbbox((0, 0), "Ay", font=fnt)
         h_single = bbox_sample[3] - bbox_sample[1]
-        total_h = (h_single * len(linie)) + (line_spacing * (len(linie)-1))
+        total_h = (h_single * len(linie)) + (line_spacing * (len(linie) - 1))
         
         curr_y = y_s + (y_e - y_s - total_h) // 2
 
@@ -73,15 +79,16 @@ class TlumaczA6PLEN:
             messagebox.showwarning("Brak tekstu", "Wpisz co najmniej jedno słowo lub frazę!")
             return
             
-        f = filedialog.askdirectory()
-        if not f: return
+        # Wybór folderu docelowego
+        folder_sciezka = filedialog.askdirectory(title="Wybierz folder do zapisu etykiet")
+        if not folder_sciezka: 
+            return
         
-        cel = os.path.join(f, "ETYKIETY_PL_EN")
-        os.makedirs(cel, exist_ok=True)
+        self.p["value"] = 0
         self.p["maximum"] = len(dane)
         
-        # Tłumacz z Polskiego na Angielski
         translator = GoogleTranslator(source='pl', target='en')
+        sukcesy = 0
 
         for i, pl in enumerate(dane, 1):
             try:
@@ -91,22 +98,28 @@ class TlumaczA6PLEN:
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
                 
-                # Rysowanie 2 sekcji: Angielski na górze, Polski na dole
+                # Rysowanie sekcji
                 self.rysuj_sekcje_auto(draw, en, (0, h2))
                 self.rysuj_sekcje_auto(draw, pl, (h2, H))
                 
-                # Środkowa linia podziału i ramka zewnętrzna
-                draw.line([(80, h2), (W-80, h2)], fill="black", width=6)
-                draw.rectangle([20, 20, W-20, H-20], outline="black", width=10)
+                # Linie i ramka
+                draw.line([(80, h2), (W - 80, h2)], fill="black", width=6)
+                draw.rectangle([20, 20, W - 20, H - 20], outline="black", width=10)
                 
-                img.save(os.path.join(cel, f"{i:03d}_{nazwa_pliku(pl)}.png"), dpi=(300, 300))
+                # Bezpośredni zapis do wybranego folderu
+                nazwa = f"{i:03d}_{nazwa_pliku(pl)}.png"
+                sciezka_pliku = os.path.join(folder_sciezka, nazwa)
+                
+                img.save(sciezka_pliku, "PNG", dpi=(300, 300))
+                sukcesy += 1
             except Exception as e:
-                print(f"Błąd dla {pl}: {e}")
+                messagebox.showerror("Błąd generowania", f"Nie udało się utworzyć etykiety dla: '{pl}'\n\nPowód: {e}")
             
             self.p["value"] = i
             self.r.update()
             
-        messagebox.showinfo("OK", "Gotowe! Sprawdź folder ETYKIETY_PL_EN.")
+        if sukcesy > 0:
+            messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
 
 if __name__ == "__main__":
     root = tk.Tk()

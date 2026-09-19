@@ -1,0 +1,3 @@
+Pillow
+deep-translator
+pyinstaller

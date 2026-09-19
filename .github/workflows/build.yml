@@ -1,15 +1,8 @@
-name: Build Executable
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
+name: Build Translator EXE
+on: [push]
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v4
 
@@ -20,15 +13,14 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Build with PyInstaller
+    - name: Build EXE
       run: |
-        pyinstaller --onefile --noconsole main.py
+        pyinstaller --noconsole --onefile --name "Tlumacz_Multi_A6" main.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: TRANSLATOR-PL-EN-exe
-        path: dist/main.exe
+        name: Gotowy_Program
+        path: dist/Tlumacz_Multi_A6.exe

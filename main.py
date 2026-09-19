@@ -1,4 +1,4 @@
-import os, re, tkinter as tk
+import os, re, time, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
@@ -30,7 +30,6 @@ class TlumaczA6PLEN:
         self.p.pack(pady=10)
 
     def pobierz_czcionke(self, font_size):
-        # Bezpieczne pobieranie czcionki systemowej
         sciezki_czcionek = [
             "arialbd.ttf",
             "C:\\Windows\\Fonts\\arialbd.ttf",
@@ -79,7 +78,6 @@ class TlumaczA6PLEN:
             messagebox.showwarning("Brak tekstu", "Wpisz co najmniej jedno słowo lub frazę!")
             return
             
-        # Wybór folderu docelowego
         folder_sciezka = filedialog.askdirectory(title="Wybierz folder do zapisu etykiet")
         if not folder_sciezka: 
             return
@@ -91,32 +89,41 @@ class TlumaczA6PLEN:
         sukcesy = 0
 
         for i, pl in enumerate(dane, 1):
+            en = None
+            # Próba tłumaczenia z bezpiecznym powtarzaniem w razie limitu
+            for proba in range(3):
+                try:
+                    en = translator.translate(pl)
+                    break
+                except Exception:
+                    time.sleep(1.5) # Czekaj 1.5 s przed kolejną próbą
+
+            if not en:
+                messagebox.showerror("Błąd limitu", f"Google zablokowało zapytanie dla: '{pl}'. Odczekaj chwilę i spróbuj ponownie.")
+                continue
+
             try:
-                en = translator.translate(pl)
-                
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
                 
-                # Rysowanie sekcji
                 self.rysuj_sekcje_auto(draw, en, (0, h2))
                 self.rysuj_sekcje_auto(draw, pl, (h2, H))
                 
-                # Linie i ramka
                 draw.line([(80, h2), (W - 80, h2)], fill="black", width=6)
                 draw.rectangle([20, 20, W - 20, H - 20], outline="black", width=10)
                 
-                # Bezpośredni zapis do wybranego folderu
                 nazwa = f"{i:03d}_{nazwa_pliku(pl)}.png"
                 sciezka_pliku = os.path.join(folder_sciezka, nazwa)
                 
                 img.save(sciezka_pliku, "PNG", dpi=(300, 300))
                 sukcesy += 1
             except Exception as e:
-                messagebox.showerror("Błąd generowania", f"Nie udało się utworzyć etykiety dla: '{pl}'\n\nPowód: {e}")
+                print(f"Błąd tworzenia obrazu dla {pl}: {e}")
             
             self.p["value"] = i
             self.r.update()
+            time.sleep(0.5) # Odstęp 0.5 sekundy między etykietami, aby uniknąć blokady
             
         if sukcesy > 0:
             messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")

@@ -11,33 +11,29 @@ def nazwa_pliku(s):
     s = re.sub(r'[\\/*?:"<>|]', "", s)
     return s.strip().replace(" ", "_")[:30]
 
-class TlumaczA6:
+class TlumaczA6PLEN:
     def __init__(self, r):
         self.r = r
-        self.r.title("Generator Etykiet A6")
+        self.r.title("Generator Etykiet A6 (PL / EN)")
         
-        frame_lang = tk.Frame(r)
-        frame_lang.pack(pady=10, padx=10)
-        
-        tk.Label(frame_lang, text="Język 1:").grid(row=0, column=0, pady=2)
-        self.lang1 = tk.StringVar(value="de")
-        tk.Entry(frame_lang, textvariable=self.lang1, width=10).grid(row=0, column=1)
-        
-        tk.Label(frame_lang, text="Język 2:").grid(row=1, column=0, pady=2)
-        self.lang2 = tk.StringVar(value="en")
-        tk.Entry(frame_lang, textvariable=self.lang2, width=10).grid(row=1, column=1)
+        # Nagłówek
+        lbl_info = tk.Label(r, text="Etykiety A6: Polski + Angielski", font=("Arial", 11, "bold"))
+        lbl_info.pack(pady=(10, 0))
 
+        # Pole tekstowe do wklejania haseł
         self.t = tk.Text(r, height=10, width=50)
         self.t.pack(pady=10, padx=10)
         
-        self.btn = tk.Button(r, text="GENERUJ ETYKIETY", command=self.go, bg="green", fg="white", font=("Arial", 10, "bold"))
-        self.btn.pack(pady=10)
+        # Przycisk generowania
+        self.btn = tk.Button(r, text="GENERUJ ETYKIETY (PL / EN)", command=self.go, bg="green", fg="white", font=("Arial", 10, "bold"))
+        self.btn.pack(pady=5)
         
+        # Pasek postępu
         self.p = ttk.Progressbar(r, length=300, mode='determinate')
         self.p.pack(pady=10)
 
     def rysuj_sekcje_auto(self, draw, tekst, y_range):
-        font_size = 80
+        font_size = 85
         try:
             fnt = ImageFont.truetype("arialbd.ttf", font_size)
         except:
@@ -51,7 +47,7 @@ class TlumaczA6:
         linie = textwrap.wrap(tekst.upper(), width=limit)
         
         if len(linie) > 3:
-            font_size = 60
+            font_size = 65
             try: fnt = ImageFont.truetype("arialbd.ttf", font_size)
             except: fnt = ImageFont.load_default()
             limit = max(1, int(max_w // (char_w * 0.7)))
@@ -73,40 +69,47 @@ class TlumaczA6:
 
     def go(self):
         dane = [d.strip() for d in self.t.get("1.0", "end").split('\n') if d.strip()]
-        if not dane: return
+        if not dane: 
+            messagebox.showwarning("Brak tekstu", "Wpisz co najmniej jedno słowo lub frazę!")
+            return
+            
         f = filedialog.askdirectory()
         if not f: return
         
-        cel = os.path.join(f, "ETYKIETY")
+        cel = os.path.join(f, "ETYKIETY_PL_EN")
         os.makedirs(cel, exist_ok=True)
         self.p["maximum"] = len(dane)
         
-        t1 = GoogleTranslator(source='pl', target=self.lang1.get())
-        t2 = GoogleTranslator(source='pl', target=self.lang2.get())
+        # Tłumacz z Polskiego na Angielski
+        translator = GoogleTranslator(source='pl', target='en')
 
         for i, pl in enumerate(dane, 1):
             try:
-                txt1 = t1.translate(pl)
-                txt2 = t2.translate(pl)
+                en = translator.translate(pl)
                 
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
-                h3 = H // 3
+                h2 = H // 2
                 
-                self.rysuj_sekcje_auto(draw, txt1, (0, h3))
-                self.rysuj_sekcje_auto(draw, txt2, (h3, 2*h3))
-                self.rysuj_sekcje_auto(draw, pl, (2*h3, H))
+                # Rysowanie 2 sekcji: Angielski na górze, Polski na dole
+                self.rysuj_sekcje_auto(draw, en, (0, h2))
+                self.rysuj_sekcje_auto(draw, pl, (h2, H))
                 
-                draw.line([(80, h3), (W-80, h3)], fill="black", width=5)
-                draw.line([(80, 2*h3), (W-80, 2*h3)], fill="black", width=5)
+                # Środkowa linia podziału i ramka zewnętrzna
+                draw.line([(80, h2), (W-80, h2)], fill="black", width=6)
                 draw.rectangle([20, 20, W-20, H-20], outline="black", width=10)
                 
                 img.save(os.path.join(cel, f"{i:03d}_{nazwa_pliku(pl)}.png"), dpi=(300, 300))
-            except: pass
+            except Exception as e:
+                print(f"Błąd dla {pl}: {e}")
             
             self.p["value"] = i
             self.r.update()
-        messagebox.showinfo("OK", "Gotowe! Sprawdź folder ETYKIETY.")
+            
+        messagebox.showinfo("OK", "Gotowe! Sprawdź folder ETYKIETY_PL_EN.")
 
 if __name__ == "__main__":
-    root = tk.Tk(); TlumaczA6(root); root.mainloop()
+    root = tk.Tk()
+    root.geometry("450x380")
+    TlumaczA6PLEN(root)
+    root.mainloop()

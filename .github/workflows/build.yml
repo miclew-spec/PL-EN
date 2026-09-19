@@ -1,4 +1,4 @@
-name: Build Translator EXE
+name: Build Translator PL-EN EXE
 on: [push]
 jobs:
   build:
@@ -17,10 +17,10 @@ jobs:
 
     - name: Build EXE
       run: |
-        pyinstaller --noconsole --onefile --name "Tlumacz_Multi_A6" main.py
+        pyinstaller --noconsole --onefile --name "Tlumacz_PL_EN_A6" main.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Gotowy_Program
-        path: dist/Tlumacz_Multi_A6.exe
+        name: Gotowy_Program_PL_EN
+        path: dist/Tlumacz_PL_EN_A6.exe

@@ -1,12 +1,13 @@
-import os, re, json, threading, tkinter as tk
+import os, re, threading, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-from deep_translator import GoogleTranslator
+from googletrans import Translator
 
 # Rozmiar A6 przy 300 DPI
 W, H = int(148 / 25.4 * 300), int(105 / 25.4 * 300)
 
+# Słownik z kodyzacją Google Translate (kaszubski = csb)
 JEZYKI = {
     "Polski": "pl",
     "Angielski": "en",
@@ -20,46 +21,15 @@ JEZYKI = {
     "Czeski": "cs"
 }
 
-# Wbudowany słownik polsko-kaszubski dla popularnych fraz / etykiet
-SLOWNIK_KASZUBSKI = {
-    "WODA": "WÒDA",
-    "MLEKO": "MLÉKÒ",
-    "CHLEB": "CHLÉB",
-    "JABŁKO": "JABŁKÒ",
-    "SER": "SÉR",
-    "SOK": "SOK",
-    "KAWA": "KAFÉ",
-    "HERBATA": "TÉ",
-    "RYBA": "RËBA",
-    "MIĘSO": "MIĘSO",
-    "CUKIER": "CUKER",
-    "SÓL": "SÓL",
-    "MASŁO": "MASŁO",
-    "JAJKO": "JAJÉ",
-    "PIWO": "PIWÒ",
-    "DZIEN DOBRY": "DOWIDZENIÉ",
-    "DZIĘKUJĘ": "BÓG ZAPŁAĆ",
-    "DOM": "DÓM"
-}
-
-# Jeśli istnieje plik kaszubski.json w folderze programu, dograj go
-if os.path.exists("kaszubski.json"):
-    try:
-        with open("kaszubski.json", "r", encoding="utf-8") as f:
-            custom_dict = json.load(f)
-            SLOWNIK_KASZUBSKI.update({k.upper(): v.upper() for k, v in custom_dict.items()})
-    except Exception as e:
-        print(f"Błąd ładowania pliku kaszubski.json: {e}")
-
 def nazwa_pliku(s):
     s = re.sub(r'[\\/*?:"<>|]', "", s)
     s = s.strip().replace(" ", "_")
     return s[:25] if s else "etykieta"
 
-class TlumaczA6MultiLang:
+class TlumaczA6Auto:
     def __init__(self, r):
         self.r = r
-        self.r.title("Generator Etykiet A6 - MultiLang (w tym Kaszubski)")
+        self.r.title("Generator Etykiet A6 - Automatyczny Kaszubski")
         
         lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki tłumaczania", font=("Arial", 11, "bold"))
         lbl_info.pack(pady=(10, 5))
@@ -88,6 +58,8 @@ class TlumaczA6MultiLang:
 
         self.p = ttk.Progressbar(r, length=300, mode='determinate')
         self.p.pack(pady=10)
+        
+        self.translator = Translator()
 
     def pobierz_czcionke(self, font_size):
         sciezki_czcionek = [
@@ -132,23 +104,6 @@ class TlumaczA6MultiLang:
             draw.text(((W - tw) // 2, curr_y), l, fill="black", font=fnt)
             curr_y += h_single + line_spacing
 
-    def tlumacz_tekst(self, tekst, src_code, target_code):
-        # Tłumaczenie z/na Kaszubski poprzez słownik lokalny
-        if target_code == "csb":
-            k = tekst.strip().upper()
-            return SLOWNIK_KASZUBSKI.get(k, tekst) # zwraca odpowiednik lub wpisany tekst
-        elif src_code == "csb":
-            # Odwrotne szukanie
-            k = tekst.strip().upper()
-            odwrotny = {v: k for k, v in SLOWNIK_KASZUBSKI.items()}
-            tekst_pl = odwrotny.get(k, tekst)
-            if target_code == "pl":
-                return tekst_pl
-            return GoogleTranslator(source="pl", target=target_code).translate(tekst_pl)
-        else:
-            # Dla pozostałych języków używamy Google Translate API
-            return GoogleTranslator(source=src_code, target=target_code).translate(tekst)
-
     def start_process(self):
         threading.Thread(target=self.go, daemon=True).start()
 
@@ -174,35 +129,14 @@ class TlumaczA6MultiLang:
         for i, org_text in enumerate(dane, 1):
             try:
                 self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
-                translated_text = self.tlumacz_tekst(org_text, src_lang, target_lang)
+                
+                # Automatyczne tłumaczenie z sieci Google
+                res = self.translator.translate(org_text, src=src_lang, dest=target_lang)
+                translated_text = res.text
                 
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
                 
                 self.rysuj_sekcje_auto(draw, translated_text, (0, h2))
-                self.rysuj_sekcje_auto(draw, org_text, (h2, H))
-                
-                draw.line([(80, h2), (W - 80, h2)], fill="black", width=6)
-                draw.rectangle([20, 20, W - 20, H - 20], outline="black", width=10)
-                
-                nazwa = f"{i:03d}_{nazwa_pliku(org_text)}.png"
-                sciezka_pliku = os.path.join(folder_sciezka, nazwa)
-                
-                img.save(sciezka_pliku, "PNG", dpi=(300, 300))
-                sukcesy += 1
-            except Exception as e:
-                print(f"Błąd dla {org_text}: {e}")
-            
-            self.p["value"] = i
-            
-        self.btn.config(state=tk.NORMAL)
-        self.status_lbl.config(text="Zakończono!")
-        if sukcesy > 0:
-            messagebox.showinfo("Sukces!", f"Wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
-
-if __name__ == "__main__":
-    root = Tk = tk.Tk()
-    root.geometry("500x450")
-    TlumaczA6MultiLang(root)
-    root.mainloop()
+                self.rysuj_sekcje_auto(draw, org_

@@ -2,54 +2,62 @@ import os, re, threading, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-import argostranslate.package
-import argostranslate.translate
+from deep_translator import GoogleTranslator
 
 # Rozmiar A6 przy 300 DPI
-W, H = int(148/25.4*300), int(105/25.4*300)
+W, H = int(148 / 25.4 * 300), int(105 / 25.4 * 300)
+
+JEZYKI = {
+    "Polski": "pl",
+    "Angielski": "en",
+    "Niemiecki": "de",
+    "Kaszubski": "csb",
+    "Hiszpański": "es",
+    "Francuski": "fr",
+    "Włoski": "it",
+    "Ukraiński": "uk",
+    "Czeski": "cs",
+    "Wykryj automatycznie": "auto"
+}
 
 def nazwa_pliku(s):
     s = re.sub(r'[\\/*?:"<>|]', "", s)
     s = s.strip().replace(" ", "_")
     return s[:25] if s else "etykieta"
 
-class TlumaczA6PLEN:
+class TlumaczA6MutiLang:
     def __init__(self, r):
         self.r = r
-        self.r.title("Generator Etykiet A6 (PL / EN) - Offline")
+        self.r.title("Generator Etykiet A6 - Multilang")
         
-        lbl_info = tk.Label(r, text="Etykiety A6: Polski + Angielski (Brak limitów)", font=("Arial", 11, "bold"))
-        lbl_info.pack(pady=(10, 0))
+        lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki", font=("Arial", 11, "bold"))
+        lbl_info.pack(pady=(10, 5))
 
-        self.t = tk.Text(r, height=10, width=50)
+        # Sekcja wyboru języków
+        frame_lang = tk.Frame(r)
+        frame_lang.pack(pady=5)
+
+        tk.Label(frame_lang, text="Z języka:").grid(row=0, column=0, padx=5)
+        self.combo_src = ttk.Combobox(frame_lang, values=list(JEZYKI.keys()), state="readonly", width=15)
+        self.combo_src.set("Polski")
+        self.combo_src.grid(row=0, column=1, padx=5)
+
+        tk.Label(frame_lang, text="Na język:").grid(row=0, column=2, padx=5)
+        self.combo_target = ttk.Combobox(frame_lang, values=[k for k in JEZYKI.keys() if k != "Wykryj automatycznie"], state="readonly", width=15)
+        self.combo_target.set("Angielski")
+        self.combo_target.grid(row=0, column=3, padx=5)
+
+        self.t = tk.Text(r, height=8, width=55)
         self.t.pack(pady=10, padx=10)
         
-        self.btn = tk.Button(r, text="GENERUJ ETYKIETY (PL / EN)", command=self.start_process, bg="green", fg="white", font=("Arial", 10, "bold"))
+        self.btn = tk.Button(r, text="GENERUJ ETYKIETY", command=self.start_process, bg="green", fg="white", font=("Arial", 10, "bold"))
         self.btn.pack(pady=5)
         
-        self.status_lbl = tk.Label(r, text="", font=("Arial", 9))
+        self.status_lbl = tk.Label(r, text="Gotowy do pracy", font=("Arial", 9))
         self.status_lbl.pack()
 
         self.p = ttk.Progressbar(r, length=300, mode='determinate')
         self.p.pack(pady=10)
-
-        # Przygotowanie pakietu tłumacza lokalnego w tle
-        threading.Thread(target=self.inicjalizuj_tlumacz, daemon=True).start()
-
-    def inicjalizuj_tlumacz(self):
-        try:
-            self.status_lbl.config(text="Sprawdzanie pakietu językowego PL->EN...")
-            argostranslate.package.update_package_index()
-            available_packages = argostranslate.package.get_available_packages()
-            package_to_install = next(
-                filter(lambda x: x.from_code == "pl" and x.to_code == "en", available_packages),
-                None
-            )
-            if package_to_install:
-                argostranslate.package.install_from_path(package_to_install.download())
-            self.status_lbl.config(text="Gotowy do pracy (Tłumacz lokalny aktywny)")
-        except Exception:
-            self.status_lbl.config(text="Gotowy do pracy")
 
     def pobierz_czcionke(self, font_size):
         sciezki_czcionek = [
@@ -106,6 +114,11 @@ class TlumaczA6PLEN:
         folder_sciezka = filedialog.askdirectory(title="Wybierz folder do zapisu etykiet")
         if not folder_sciezka: 
             return
+
+        src_lang = JEZYKI[self.combo_src.get()]
+        target_lang = JEZYKI[self.combo_target.get()]
+
+        translator = GoogleTranslator(source=src_lang, target=target_lang)
         
         self.btn.config(state=tk.DISABLED)
         self.p["value"] = 0
@@ -113,38 +126,39 @@ class TlumaczA6PLEN:
         
         sukcesy = 0
 
-        for i, pl in enumerate(dane, 1):
+        for i, org_text in enumerate(dane, 1):
             try:
-                self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {pl[:20]}...")
-                en = argostranslate.translate.translate(pl, "pl", "en")
+                self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
+                translated_text = translator.translate(org_text)
                 
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
                 
-                self.rysuj_sekcje_auto(draw, en, (0, h2))
-                self.rysuj_sekcje_auto(draw, pl, (h2, H))
+                # Górne pole: tekst przetłumaczony, dolne: tekst źródłowy
+                self.rysuj_sekcje_auto(draw, translated_text, (0, h2))
+                self.rysuj_sekcje_auto(draw, org_text, (h2, H))
                 
                 draw.line([(80, h2), (W - 80, h2)], fill="black", width=6)
                 draw.rectangle([20, 20, W - 20, H - 20], outline="black", width=10)
                 
-                nazwa = f"{i:03d}_{nazwa_pliku(pl)}.png"
+                nazwa = f"{i:03d}_{nazwa_pliku(org_text)}.png"
                 sciezka_pliku = os.path.join(folder_sciezka, nazwa)
                 
                 img.save(sciezka_pliku, "PNG", dpi=(300, 300))
                 sukcesy += 1
             except Exception as e:
-                print(f"Błąd dla {pl}: {e}")
+                print(f"Błąd dla {org_text}: {e}")
             
             self.p["value"] = i
             
         self.btn.config(state=tk.NORMAL)
         self.status_lbl.config(text="Zakończono!")
         if sukcesy > 0:
-            messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano {sukcesy} etykiet bez limitów w folderze:\n{folder_sciezka}")
+            messagebox.showinfo("Sukces!", f"Wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("450x410")
-    TlumaczA6PLEN(root)
+    root.geometry("500x450")
+    TlumaczA6MutiLang(root)
     root.mainloop()

@@ -2,12 +2,11 @@ import os, re, threading, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 # Rozmiar A6 przy 300 DPI
 W, H = int(148 / 25.4 * 300), int(105 / 25.4 * 300)
 
-# Słownik z kodyzacją Google Translate (kaszubski = csb)
 JEZYKI = {
     "Polski": "pl",
     "Angielski": "en",
@@ -29,7 +28,7 @@ def nazwa_pliku(s):
 class TlumaczA6Auto:
     def __init__(self, r):
         self.r = r
-        self.r.title("Generator Etykiet A6 - Automatyczny Kaszubski")
+        self.r.title("Generator Etykiet A6 - MultiLang")
         
         lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki tłumaczania", font=("Arial", 11, "bold"))
         lbl_info.pack(pady=(10, 5))
@@ -58,8 +57,6 @@ class TlumaczA6Auto:
 
         self.p = ttk.Progressbar(r, length=300, mode='determinate')
         self.p.pack(pady=10)
-        
-        self.translator = Translator()
 
     def pobierz_czcionke(self, font_size):
         sciezki_czcionek = [
@@ -120,6 +117,8 @@ class TlumaczA6Auto:
         src_lang = JEZYKI[self.combo_src.get()]
         target_lang = JEZYKI[self.combo_target.get()]
         
+        translator = GoogleTranslator(source=src_lang, target=target_lang)
+
         self.btn.config(state=tk.DISABLED)
         self.p["value"] = 0
         self.p["maximum"] = len(dane)
@@ -128,15 +127,4 @@ class TlumaczA6Auto:
 
         for i, org_text in enumerate(dane, 1):
             try:
-                self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
-                
-                # Automatyczne tłumaczenie z sieci Google
-                res = self.translator.translate(org_text, src=src_lang, dest=target_lang)
-                translated_text = res.text
-                
-                img = Image.new("RGB", (W, H), "white")
-                draw = ImageDraw.Draw(img)
-                h2 = H // 2
-                
-                self.rysuj_sekcje_auto(draw, translated_text, (0, h2))
-                self.rysuj_sekcje_auto(draw, org_
+                self.status_lbl.config

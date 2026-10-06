@@ -30,7 +30,7 @@ class TlumaczA6Auto:
         self.r = r
         self.r.title("Generator Etykiet A6 - MultiLang")
         
-        lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki tłumaczania", font=("Arial", 11, "bold"))
+        lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki tłumaczenia", font=("Arial", 11, "bold"))
         lbl_info.pack(pady=(10, 5))
 
         frame_lang = tk.Frame(r)
@@ -116,21 +116,27 @@ class TlumaczA6Auto:
 
         src_lang = JEZYKI[self.combo_src.get()]
         target_lang = JEZYKI[self.combo_target.get()]
-        
-        translator = GoogleTranslator(source=src_lang, target=target_lang)
 
         self.btn.config(state=tk.DISABLED)
         self.p["value"] = 0
         self.p["maximum"] = len(dane)
         
         sukcesy = 0
+        bledy = []
 
         for i, org_text in enumerate(dane, 1):
             try:
                 self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
                 
-                translated_text = translator.translate(org_text)
+                # Tłumaczenie
+                if src_lang == target_lang:
+                    translated_text = org_text
+                else:
+                    translated_text = GoogleTranslator(source=src_lang, target=target_lang).translate(org_text)
                 
+                if not translated_text:
+                    translated_text = org_text
+
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
@@ -147,14 +153,18 @@ class TlumaczA6Auto:
                 img.save(sciezka_pliku, "PNG", dpi=(300, 300))
                 sukcesy += 1
             except Exception as e:
-                print(f"Błąd dla {org_text}: {e}")
+                bledy.append(f"{org_text}: {str(e)}")
             
             self.p["value"] = i
             
         self.btn.config(state=tk.NORMAL)
         self.status_lbl.config(text="Zakończono!")
+        
         if sukcesy > 0:
-            messagebox.showinfo("Sukces!", f"Wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
+            messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
+        
+        if bledy:
+            messagebox.showerror("Błędy", f"Wystąpił błąd przy {len(bledy)} pozycjach:\n" + "\n".join(bledy[:5]))
 
 if __name__ == "__main__":
     root = tk.Tk()

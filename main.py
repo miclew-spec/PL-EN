@@ -127,4 +127,37 @@ class TlumaczA6Auto:
 
         for i, org_text in enumerate(dane, 1):
             try:
-                self.status_lbl.config
+                self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
+                
+                translated_text = translator.translate(org_text)
+                
+                img = Image.new("RGB", (W, H), "white")
+                draw = ImageDraw.Draw(img)
+                h2 = H // 2
+                
+                self.rysuj_sekcje_auto(draw, translated_text, (0, h2))
+                self.rysuj_sekcje_auto(draw, org_text, (h2, H))
+                
+                draw.line([(80, h2), (W - 80, h2)], fill="black", width=6)
+                draw.rectangle([20, 20, W - 20, H - 20], outline="black", width=10)
+                
+                nazwa = f"{i:03d}_{nazwa_pliku(org_text)}.png"
+                sciezka_pliku = os.path.join(folder_sciezka, nazwa)
+                
+                img.save(sciezka_pliku, "PNG", dpi=(300, 300))
+                sukcesy += 1
+            except Exception as e:
+                print(f"Błąd dla {org_text}: {e}")
+            
+            self.p["value"] = i
+            
+        self.btn.config(state=tk.NORMAL)
+        self.status_lbl.config(text="Zakończono!")
+        if sukcesy > 0:
+            messagebox.showinfo("Sukces!", f"Wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.geometry("500x450")
+    TlumaczA6Auto(root)
+    root.mainloop()

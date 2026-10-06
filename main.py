@@ -125,18 +125,18 @@ class TlumaczA6Auto:
         bledy = []
 
         for i, org_text in enumerate(dane, 1):
+            translated_text = org_text
+            
+            # Próba tłumaczenia z obsługą błędu braków w sieci
             try:
                 self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
-                
-                # Tłumaczenie
-                if src_lang == target_lang:
-                    translated_text = org_text
-                else:
+                if src_lang != target_lang:
                     translated_text = GoogleTranslator(source=src_lang, target=target_lang).translate(org_text)
-                
-                if not translated_text:
-                    translated_text = org_text
+            except Exception as err:
+                bledy.append(f"{org_text}: Błąd tłumaczania ({err})")
+                translated_text = org_text # używa oryginalnego tekstu w razie braku połączenia
 
+            try:
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
@@ -152,8 +152,8 @@ class TlumaczA6Auto:
                 
                 img.save(sciezka_pliku, "PNG", dpi=(300, 300))
                 sukcesy += 1
-            except Exception as e:
-                bledy.append(f"{org_text}: {str(e)}")
+            except Exception as err_save:
+                bledy.append(f"{org_text}: Błąd zapisu pliku ({err_save})")
             
             self.p["value"] = i
             
@@ -164,7 +164,7 @@ class TlumaczA6Auto:
             messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
         
         if bledy:
-            messagebox.showerror("Błędy", f"Wystąpił błąd przy {len(bledy)} pozycjach:\n" + "\n".join(bledy[:5]))
+            messagebox.showwarning("Uwaga!", f"Wystąpiły problemy z poniższymi pozycjami:\n\n" + "\n".join(bledy[:5]))
 
 if __name__ == "__main__":
     root = tk.Tk()

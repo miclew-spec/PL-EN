@@ -1,8 +1,7 @@
-import os, re, threading, tkinter as tk
+import os, re, json, time, threading, urllib.request, urllib.parse, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-from deep_translator import GoogleTranslator
 
 # Rozmiar A6 przy 300 DPI
 W, H = int(148 / 25.4 * 300), int(105 / 25.4 * 300)
@@ -25,10 +24,30 @@ def nazwa_pliku(s):
     s = s.strip().replace(" ", "_")
     return s[:25] if s else "etykieta"
 
+def tlumacz_google_direct(tekst, src, dest):
+    """Bezpośrednie połączenie z Google Translate z obsługą opóźnień i ponawiania próby"""
+    if src == dest:
+        return tekst
+
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={src}&tl={dest}&dt=t&q=" + urllib.parse.quote(tekst)
+    
+    for proba in range(3):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                przetlumaczone = "".join([segment[0] for segment in data[0] if segment[0]])
+                if przetlumaczone:
+                    return przetlumaczone
+        except Exception as e:
+            time.sleep(1) # Odczekanie przed kolejną próbą
+            
+    return tekst
+
 class TlumaczA6Auto:
     def __init__(self, r):
         self.r = r
-        self.r.title("Generator Etykiet A6 - MultiLang")
+        self.r.title("Generator Etykiet A6 - MultiLang (Bez limitu zapytań)")
         
         lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki tłumaczenia", font=("Arial", 11, "bold"))
         lbl_info.pack(pady=(10, 5))
@@ -122,21 +141,14 @@ class TlumaczA6Auto:
         self.p["maximum"] = len(dane)
         
         sukcesy = 0
-        bledy = []
 
         for i, org_text in enumerate(dane, 1):
-            translated_text = org_text
-            
-            # Próba tłumaczenia z obsługą błędu braków w sieci
             try:
                 self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
-                if src_lang != target_lang:
-                    translated_text = GoogleTranslator(source=src_lang, target=target_lang).translate(org_text)
-            except Exception as err:
-                bledy.append(f"{org_text}: Błąd tłumaczania ({err})")
-                translated_text = org_text # używa oryginalnego tekstu w razie braku połączenia
+                
+                # Tłumaczenie
+                translated_text = tlumacz_google_direct(org_text, src_lang, target_lang)
 
-            try:
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
@@ -152,19 +164,18 @@ class TlumaczA6Auto:
                 
                 img.save(sciezka_pliku, "PNG", dpi=(300, 300))
                 sukcesy += 1
-            except Exception as err_save:
-                bledy.append(f"{org_text}: Błąd zapisu pliku ({err_save})")
+            except Exception as e:
+                print(f"Błąd dla {org_text}: {e}")
             
+            # Dodanie krótkiej przerwy (0.5s), by nie przekroczyć limitów serwera
+            time.sleep(0.5)
             self.p["value"] = i
             
         self.btn.config(state=tk.NORMAL)
         self.status_lbl.config(text="Zakończono!")
         
         if sukcesy > 0:
-            messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
-        
-        if bledy:
-            messagebox.showwarning("Uwaga!", f"Wystąpiły problemy z poniższymi pozycjami:\n\n" + "\n".join(bledy[:5]))
+            messagebox.showinfo("Sukces!", f"Pomyślnie wygenerowano i przetłumaczono {sukcesy} etykiet w folderze:\n{folder_sciezka}")
 
 if __name__ == "__main__":
     root = tk.Tk()

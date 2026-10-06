@@ -1,4 +1,4 @@
-import os, re, threading, tkinter as tk
+import os, re, json, threading, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
@@ -12,39 +12,69 @@ JEZYKI = {
     "Angielski": "en",
     "Niemiecki": "de",
     "Kaszubski": "csb",
+    "Śląski": "szl",
     "Hiszpański": "es",
     "Francuski": "fr",
     "Włoski": "it",
     "Ukraiński": "uk",
-    "Czeski": "cs",
-    "Wykryj automatycznie": "auto"
+    "Czeski": "cs"
 }
+
+# Wbudowany słownik polsko-kaszubski dla popularnych fraz / etykiet
+SLOWNIK_KASZUBSKI = {
+    "WODA": "WÒDA",
+    "MLEKO": "MLÉKÒ",
+    "CHLEB": "CHLÉB",
+    "JABŁKO": "JABŁKÒ",
+    "SER": "SÉR",
+    "SOK": "SOK",
+    "KAWA": "KAFÉ",
+    "HERBATA": "TÉ",
+    "RYBA": "RËBA",
+    "MIĘSO": "MIĘSO",
+    "CUKIER": "CUKER",
+    "SÓL": "SÓL",
+    "MASŁO": "MASŁO",
+    "JAJKO": "JAJÉ",
+    "PIWO": "PIWÒ",
+    "DZIEN DOBRY": "DOWIDZENIÉ",
+    "DZIĘKUJĘ": "BÓG ZAPŁAĆ",
+    "DOM": "DÓM"
+}
+
+# Jeśli istnieje plik kaszubski.json w folderze programu, dograj go
+if os.path.exists("kaszubski.json"):
+    try:
+        with open("kaszubski.json", "r", encoding="utf-8") as f:
+            custom_dict = json.load(f)
+            SLOWNIK_KASZUBSKI.update({k.upper(): v.upper() for k, v in custom_dict.items()})
+    except Exception as e:
+        print(f"Błąd ładowania pliku kaszubski.json: {e}")
 
 def nazwa_pliku(s):
     s = re.sub(r'[\\/*?:"<>|]', "", s)
     s = s.strip().replace(" ", "_")
     return s[:25] if s else "etykieta"
 
-class TlumaczA6MutiLang:
+class TlumaczA6MultiLang:
     def __init__(self, r):
         self.r = r
-        self.r.title("Generator Etykiet A6 - Multilang")
+        self.r.title("Generator Etykiet A6 - MultiLang (w tym Kaszubski)")
         
-        lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki", font=("Arial", 11, "bold"))
+        lbl_info = tk.Label(r, text="Etykiety A6: Wybierz języki tłumaczania", font=("Arial", 11, "bold"))
         lbl_info.pack(pady=(10, 5))
 
-        # Sekcja wyboru języków
         frame_lang = tk.Frame(r)
         frame_lang.pack(pady=5)
 
         tk.Label(frame_lang, text="Z języka:").grid(row=0, column=0, padx=5)
-        self.combo_src = ttk.Combobox(frame_lang, values=list(JEZYKI.keys()), state="readonly", width=15)
+        self.combo_src = ttk.Combobox(frame_lang, values=list(JEZYKI.keys()), state="readonly", width=12)
         self.combo_src.set("Polski")
         self.combo_src.grid(row=0, column=1, padx=5)
 
         tk.Label(frame_lang, text="Na język:").grid(row=0, column=2, padx=5)
-        self.combo_target = ttk.Combobox(frame_lang, values=[k for k in JEZYKI.keys() if k != "Wykryj automatycznie"], state="readonly", width=15)
-        self.combo_target.set("Angielski")
+        self.combo_target = ttk.Combobox(frame_lang, values=list(JEZYKI.keys()), state="readonly", width=12)
+        self.combo_target.set("Kaszubski")
         self.combo_target.grid(row=0, column=3, padx=5)
 
         self.t = tk.Text(r, height=8, width=55)
@@ -102,6 +132,23 @@ class TlumaczA6MutiLang:
             draw.text(((W - tw) // 2, curr_y), l, fill="black", font=fnt)
             curr_y += h_single + line_spacing
 
+    def tlumacz_tekst(self, tekst, src_code, target_code):
+        # Tłumaczenie z/na Kaszubski poprzez słownik lokalny
+        if target_code == "csb":
+            k = tekst.strip().upper()
+            return SLOWNIK_KASZUBSKI.get(k, tekst) # zwraca odpowiednik lub wpisany tekst
+        elif src_code == "csb":
+            # Odwrotne szukanie
+            k = tekst.strip().upper()
+            odwrotny = {v: k for k, v in SLOWNIK_KASZUBSKI.items()}
+            tekst_pl = odwrotny.get(k, tekst)
+            if target_code == "pl":
+                return tekst_pl
+            return GoogleTranslator(source="pl", target=target_code).translate(tekst_pl)
+        else:
+            # Dla pozostałych języków używamy Google Translate API
+            return GoogleTranslator(source=src_code, target=target_code).translate(tekst)
+
     def start_process(self):
         threading.Thread(target=self.go, daemon=True).start()
 
@@ -117,8 +164,6 @@ class TlumaczA6MutiLang:
 
         src_lang = JEZYKI[self.combo_src.get()]
         target_lang = JEZYKI[self.combo_target.get()]
-
-        translator = GoogleTranslator(source=src_lang, target=target_lang)
         
         self.btn.config(state=tk.DISABLED)
         self.p["value"] = 0
@@ -129,13 +174,12 @@ class TlumaczA6MutiLang:
         for i, org_text in enumerate(dane, 1):
             try:
                 self.status_lbl.config(text=f"Tłumaczenie ({i}/{len(dane)}): {org_text[:20]}...")
-                translated_text = translator.translate(org_text)
+                translated_text = self.tlumacz_tekst(org_text, src_lang, target_lang)
                 
                 img = Image.new("RGB", (W, H), "white")
                 draw = ImageDraw.Draw(img)
                 h2 = H // 2
                 
-                # Górne pole: tekst przetłumaczony, dolne: tekst źródłowy
                 self.rysuj_sekcje_auto(draw, translated_text, (0, h2))
                 self.rysuj_sekcje_auto(draw, org_text, (h2, H))
                 
@@ -158,7 +202,7 @@ class TlumaczA6MutiLang:
             messagebox.showinfo("Sukces!", f"Wygenerowano {sukcesy} etykiet w folderze:\n{folder_sciezka}")
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = Tk = tk.Tk()
     root.geometry("500x450")
-    TlumaczA6MutiLang(root)
+    TlumaczA6MultiLang(root)
     root.mainloop()
